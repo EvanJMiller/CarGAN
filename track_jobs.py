@@ -1,28 +1,32 @@
-
 import os
 import re
 
 def show_job_files(job):
-    filtered = []
-    files = os.listdir()
+    output_files = []
+    error_files = []
+
+    files = os.listdir('/')
 
     pattern = r'(?P<job>[\w\_]+).sub.(?P<id>(?P<type>(e|o))[\w]+)'
 
-    result = re.match(pattern, job)
-
-    print(result.groupdict())
-
     for file in files:
-        if job in file:
-            filtered.append(file)
+        result = re.match(pattern, job)
+        if result is not None:
+            if result.groupdict()['type'] == 'e':
+                error_files.append(file)
+            if result.groupdict()['type'] == 'o':
+                output_files
 
-    for file in filtered:
+    print('Error files')
+    print('--------------------------')
+    for file in error_files:
         print(file)
+        #os.rename('/error_files/' + file)
 
-if __name__ == "__main__":
+    print('\nOutput files')
+    print('--------------------------')
+    for file in output_files:
+        print(file)
+        #os.rename('/output_files' + file)
 
-    ex1 = 'my_job.sub.e36849'
-    ex2 = 'my_job.sub.o36848'
 
-    show_job_files(ex1)
-    show_job_files(ex2)
