@@ -4,7 +4,7 @@ import re
 
 def show_job_files(job):
     filtered = []
-    files = os.listdir()
+    files = os.listdir('/')
 
     pattern = r'(?P<job>[\w\_]+).sub.(?P<id>(?P<type>(e|o))[\w]+)'
 
