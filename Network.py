@@ -42,3 +42,4 @@ class Network(nn.Module):
         x = self.classifier(x)
         x = F.softmax(x)
         return x
+
