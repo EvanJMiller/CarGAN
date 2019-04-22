@@ -57,7 +57,7 @@ def train():
     log_interval = 10
     training_batch_size = 128
     testing_batch_size = 1000
-    crop_size = 64
+    crop_size = 28
 
     channels = 3
     image_size = 64
@@ -66,38 +66,45 @@ def train():
     beta1 = 0.5
 
     # number of gpus
-    ngpu = 0
+    ngpu = 1
 
     num_epochs = 100
 
     # Decide which device we want to run on
-    device = torch.device("cuda:0" if (torch.cuda.is_available() and ngpu > 0) else "cpu")
+    #device = torch.device("cuda:0" if (torch.cuda.is_available() and ngpu > 0) else "cpu")
 
     # Create the generator
-    generator = Generator(ngpu).to(device=device)
-    discrminator = Discriminator(ngpu).to(device=device)
+    generator = Generator(128)
+    discriminator = Discriminator(128)
 
     # Handle multi-gpu if desired
-    if (device.type == 'cuda') and (ngpu > 1):
-       generator = nn.DataParallel(generator, list(range(ngpu)))
-       discrminator = nn.DataParallel(discrminator, list(range(ngpu)))
+    #if (device.type == 'cuda') and (ngpu > 1):
+    #   generator = nn.DataParallel(generator, list(range(ngpu)))
+    #   discriminator = nn.DataParallel(discriminator, list(range(ngpu)))
 
 
     # Apply the weights_init function to randomly initialize all weights
     #  to mean=0, stdev=0.2.
     generator.apply(weights_init)
-    discrminator.apply(weights_init)
+    discriminator.apply(weights_init)
 
 
-    transform = transforms.Compose(
-        [transforms.RandomResizedCrop(crop_size), transforms.ToTensor(),
-         transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))])
+    # transform = transforms.Compose(
+    #     [transforms.ToTensor(),
+    #      transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))])
+
+    transform = transforms.Compose([
+        transforms.Scale(image_size),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
+    ])
 
     # Load Training Data...
     training_data_path = 'cars_train'
     dataset = torchvision.datasets.ImageFolder('cars_train',transform=transform)
+    dataset = torchvision.datasets.MNIST('./', train=True, transform=transform, target_transform=None, download=True)
     data_loader = torch.utils.data.DataLoader(dataset, batch_size=training_batch_size, shuffle=True,
-                                               num_workers=2)
+                                               num_workers=4)
 
     # Plot some training images
     real_batch = next(iter(data_loader))
@@ -105,23 +112,23 @@ def train():
     plt.axis("off")
     plt.title("Training Images")
     plt.imshow(
-        np.transpose(vutils.make_grid(real_batch[0].to(device)[:64], padding=2, normalize=True).cpu(), (1, 2, 0)))
-    plt.show()
+        np.transpose(vutils.make_grid(real_batch[0][:64], padding=2, normalize=True).cpu(), (1, 2, 0)))
+    #plt.show()
 
     size = len(dataset)
 
     # Initialize BCELoss function
-    criterion = nn.BCELoss()
+    criterion = nn.BCEWithLogitsLoss()
 
     # Create batch of latent vectors
-    fixed_noise = torch.randn(64, 100, 1, 1, device=device)
+    fixed_noise = torch.randn(64, 100, 1, 1)
 
     # Establish convention for real and fake labels during training
     real_label = 1
     fake_label = 0
 
     # Setup Adam optimizers for both G and D
-    D_optimizer = optim.Adam(discrminator.parameters(), lr=learning_rate, betas=(beta1, 0.999))
+    D_optimizer = optim.Adam(discriminator.parameters(), lr=learning_rate, betas=(beta1, 0.999))
     G_optimizer = optim.Adam(generator.parameters(), lr=learning_rate, betas=(beta1, 0.999))
 
     # Lists to keep track of progress
@@ -138,26 +145,33 @@ def train():
 
             # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
             ## Train with all-real batch
-            discrminator.zero_grad()
+            discriminator.zero_grad()
 
-            real_cpu = data[0].to(device)
+            real_cpu = data[0]
             b_size = real_cpu.size(0)
+            # Format batch
+            label = torch.full((b_size,), real_label)
+            output_real = torch.ones(128)
+            output_fake = torch.zeros(128)
 
-            label = torch.full((b_size,), real_label, device=device)
-            output = discrminator(real_cpu).view(-1)
+            #label = torch.full((b_size,), real_label)
+            output = discriminator(data[0]).view(-1)
+
             d_real_image_error = criterion(output, label)
+
             # Calculate gradients for D in backward pass
             d_real_image_error.backward()
             D_x = output.mean().item()
 
-            noise = torch.randn(b_size, 100, 1, 1, device=device)
+            #noise = torch.randn(data[0].size(), 100, 1, 1)
+            noise = torch.randn(b_size,100, 1, 1)
             # Generate fake image batch with G
             fake = generator(noise)
-            label.fill_(fake_label)
+            #label.fill_(fake_label)
             # Classify all fake batch with D
-            output = discrminator(fake.detach()).view(-1)
+            output = discriminator(fake.detach()).view(-1)
             # Calculate D's loss on the all-fake batch
-            d_fake_image_error = criterion(output, label)
+            d_fake_image_error = criterion(output, output_fake)
             # Calculate the gradients for this batch
             d_fake_image_error.backward()
             D_G_z1 = output.mean().item()
@@ -169,9 +183,9 @@ def train():
             ############################
             # (2) Update G network: maximize log(D(G(z)))
             ###########################
-            discrminator.zero_grad()
-            label.fill_(real_label)
-            output = discrminator(fake).view(-1)
+            generator.zero_grad()
+            label.fill_(label)
+            output = discriminator(fake).view(-1)
             generator_err = criterion(output, label)
             # Calculate gradients for G
             generator_err.backward()
@@ -195,6 +209,9 @@ def train():
                 img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
 
             iters += 1
+
+    torch.save(generator.state_dict(), "generator_results.pkl")
+    torch.save(discriminator.state_dict(), "discriminator_results.pkl")
 
 
 if __name__ == "__main__":

@@ -2,14 +2,16 @@
 import torch.nn as nn
 
 class Generator(nn.Module):
-    def __init__(self, ngpu):
+    def __init__(self, d):
         super(Generator, self).__init__()
 
         self.latent_z_vector = 100
-        self.num_feature_maps = 64
-        self.num_channels = 3
-        self.ngpu = ngpu
+        self.num_feature_maps = 128
+        self.num_channels = 1
+        self.ngpu = 0
 
+
+        #torch.nn.ConvTranspose2d(in_channels, out_channels, kernel_size, stride=1, padding=0, output_padding=0, groups=1, bias=True, dilation=1)
         self.main = nn.Sequential(
             # input is Z, going into a convolution
             nn.ConvTranspose2d( self.latent_z_vector, self.num_feature_maps * 8, 4, 1, 0, bias=False),
