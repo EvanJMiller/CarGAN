@@ -68,7 +68,7 @@ def train():
     # number of gpus
     ngpu = 1
 
-    num_epochs = 100
+    num_epochs = 5
 
     # Decide which device we want to run on
     #device = torch.device("cuda:0" if (torch.cuda.is_available() and ngpu > 0) else "cpu")
@@ -141,6 +141,8 @@ def train():
     # For each epoch
     for epoch in range(num_epochs):
         # For each batch in the dataloader
+        if(iters > 1000):
+            break
         for i, data in enumerate(data_loader, 0):
 
             # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
@@ -150,14 +152,14 @@ def train():
             real_cpu = data[0]
             b_size = real_cpu.size(0)
             # Format batch
-            label = torch.full((b_size,), real_label)
+            #label = torch.full((b_size,), real_label)
             output_real = torch.ones(128)
             output_fake = torch.zeros(128)
 
             #label = torch.full((b_size,), real_label)
             output = discriminator(data[0]).view(-1)
 
-            d_real_image_error = criterion(output, label)
+            d_real_image_error = criterion(output, output_real)
 
             # Calculate gradients for D in backward pass
             d_real_image_error.backward()
@@ -184,9 +186,9 @@ def train():
             # (2) Update G network: maximize log(D(G(z)))
             ###########################
             generator.zero_grad()
-            label.fill_(label)
+            #label.fill_(label)
             output = discriminator(fake).view(-1)
-            generator_err = criterion(output, label)
+            generator_err = criterion(output, output_real)
             # Calculate gradients for G
             generator_err.backward()
             D_G_z2 = output.mean().item()
@@ -202,11 +204,11 @@ def train():
             G_losses.append(generator_err.item())
             D_losses.append(errD.item())
 
-            # Check how the generator is doing by saving G's output on fixed_noise
-            if (iters % 500 == 0) or ((epoch == num_epochs - 1) and (i == len(data_loader) - 1)):
-                with torch.no_grad():
-                    fake = generator(fixed_noise).detach().cpu()
-                img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
+            # # Check how the generator is doing by saving G's output on fixed_noise
+            # if (iters % 500 == 0) or ((epoch == num_epochs - 1) and (i == len(data_loader) - 1)):
+            #     with torch.no_grad():
+            #         fake = generator(fixed_noise).detach().cpu()
+            #     img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
 
             iters += 1
 
