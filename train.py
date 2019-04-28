@@ -150,9 +150,10 @@ def train():
     print("Starting Training Loop...")
     # For each epoch
     for epoch in range(num_epochs):
-
+        print('next epoch')
         for i, data in enumerate(data_loader, 0):
 
+            print('batch')
             # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
             ## Train with all-real batch
             discriminator.zero_grad()
