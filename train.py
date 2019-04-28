@@ -18,8 +18,18 @@ import matplotlib.pyplot as plt
 from Generator import Generator
 from Discriminator import Discriminator
 
+# Create the generator
+generator = Generator(128)
+discriminator = Discriminator(128)
+
 def exit_handler():
-    print('My application is ending!')
+    if(os.path.isdir('/results')):
+        torch.save(generator.state_dict(), "results/generator_results.pkl")
+        torch.save(discriminator.state_dict(), "results/discriminator_results.pkl")
+    else:
+        torch.save(generator.state_dict(), "generator_results.pkl")
+        torch.save(discriminator.state_dict(), "discriminator_results.pkl")
+    print("Results Saved...")
 
 atexit.register(exit_handler)
 
@@ -52,7 +62,7 @@ def weights_init(m):
 def train():
 
     # Define training hyperparameters
-    epochs = 100
+    epochs = 5
     learning_rate = 0.02
     log_interval = 10
     training_batch_size = 128
@@ -96,12 +106,12 @@ def train():
     transform = transforms.Compose([
         transforms.Scale(image_size),
         transforms.ToTensor(),
-        transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
+        transforms.Normalize([0.5], [0.5])
     ])
 
     # Load Training Data...
     training_data_path = 'cars_train'
-    dataset = torchvision.datasets.ImageFolder('cars_train',transform=transform)
+    #dataset = torchvision.datasets.ImageFolder('cars_train',transform=transform)
     dataset = torchvision.datasets.MNIST('./', train=True, transform=transform, target_transform=None, download=True)
     data_loader = torch.utils.data.DataLoader(dataset, batch_size=training_batch_size, shuffle=True,
                                                num_workers=4)
@@ -140,9 +150,7 @@ def train():
     print("Starting Training Loop...")
     # For each epoch
     for epoch in range(num_epochs):
-        # For each batch in the dataloader
-        if(iters > 1000):
-            break
+
         for i, data in enumerate(data_loader, 0):
 
             # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
@@ -153,8 +161,10 @@ def train():
             b_size = real_cpu.size(0)
             # Format batch
             #label = torch.full((b_size,), real_label)
-            output_real = torch.ones(128)
-            output_fake = torch.zeros(128)
+            l = list(data[1].size())[0]
+
+            output_real = torch.ones(l)
+            output_fake = torch.zeros(l)
 
             #label = torch.full((b_size,), real_label)
             output = discriminator(data[0]).view(-1)
@@ -195,7 +205,7 @@ def train():
             G_optimizer.step()
 
             # Output training stats
-            if i % 10 == 0:
+            if i % 5 == 0:
                 print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tD(x): %.4f\tD(G(z)): %.4f / %.4f'
                       % (epoch, num_epochs, i, len(data_loader),
                          errD.item(), generator_err.item(), D_x, D_G_z1, D_G_z2))
@@ -211,9 +221,6 @@ def train():
             #     img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
 
             iters += 1
-
-    torch.save(generator.state_dict(), "generator_results.pkl")
-    torch.save(discriminator.state_dict(), "discriminator_results.pkl")
 
 
 if __name__ == "__main__":
