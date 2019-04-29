@@ -14,6 +14,7 @@ import torch.optim as optim
 import atexit
 from test import test
 import matplotlib.pyplot as plt
+from datetime import datetime
 
 from Generator import Generator
 from Discriminator import Discriminator
@@ -87,7 +88,6 @@ def train():
     generator = Generator(128)
     discriminator = Discriminator(128)
 
-    # Handle multi-gpu if desired
     #if (device.type == 'cuda') and (ngpu > 1):
     #   generator = nn.DataParallel(generator, list(range(ngpu)))
     #   discriminator = nn.DataParallel(discriminator, list(range(ngpu)))
@@ -98,11 +98,6 @@ def train():
     generator.apply(weights_init)
     discriminator.apply(weights_init)
 
-
-    # transform = transforms.Compose(
-    #     [transforms.ToTensor(),
-    #      transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))])
-
     transform = transforms.Compose([
         transforms.Scale(image_size),
         transforms.ToTensor(),
@@ -111,6 +106,9 @@ def train():
 
     # Load Training Data...
     training_data_path = 'cars_train'
+
+    #NOTE: Comment either out for training on a specific dataset
+
     #dataset = torchvision.datasets.ImageFolder('cars_train',transform=transform)
     dataset = torchvision.datasets.MNIST('./', train=True, transform=transform, target_transform=None, download=True)
     data_loader = torch.utils.data.DataLoader(dataset, batch_size=training_batch_size, shuffle=True,
@@ -132,8 +130,6 @@ def train():
 
     # Create batch of latent vectors
     fixed_noise = torch.randn(64, 100, 1, 1)
-
-    # Establish convention for real and fake labels during training
     real_label = 1
     fake_label = 0
 
@@ -148,26 +144,20 @@ def train():
     iters = 0
 
     print("Starting Training Loop...")
-    # For each epoch
+
     for epoch in range(num_epochs):
-        print('next epoch')
+
         for i, data in enumerate(data_loader, 0):
 
-            print('batch')
-            # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
-            ## Train with all-real batch
+            ## Train with real data batch
             discriminator.zero_grad()
 
             real_cpu = data[0]
             b_size = real_cpu.size(0)
-            # Format batch
-            #label = torch.full((b_size,), real_label)
             l = list(data[1].size())[0]
 
             output_real = torch.ones(l)
             output_fake = torch.zeros(l)
-
-            #label = torch.full((b_size,), real_label)
             output = discriminator(data[0]).view(-1)
 
             d_real_image_error = criterion(output, output_real)
@@ -176,7 +166,7 @@ def train():
             d_real_image_error.backward()
             D_x = output.mean().item()
 
-            #noise = torch.randn(data[0].size(), 100, 1, 1)
+            #noise vector
             noise = torch.randn(b_size,100, 1, 1)
             # Generate fake image batch with G
             fake = generator(noise)
@@ -188,14 +178,11 @@ def train():
             # Calculate the gradients for this batch
             d_fake_image_error.backward()
             D_G_z1 = output.mean().item()
-            # Add the gradients from the all-real and all-fake batches
             errD = d_real_image_error + d_fake_image_error
             # Update D
             D_optimizer.step()
 
-            ############################
-            # (2) Update G network: maximize log(D(G(z)))
-            ###########################
+            #Update the Generator
             generator.zero_grad()
             #label.fill_(label)
             output = discriminator(fake).view(-1)
@@ -205,23 +192,23 @@ def train():
             D_G_z2 = output.mean().item()
             G_optimizer.step()
 
-            # Output training stats
-            if i % 5 == 0:
-                print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tD(x): %.4f\tD(G(z)): %.4f / %.4f'
-                      % (epoch, num_epochs, i, len(data_loader),
-                         errD.item(), generator_err.item(), D_x, D_G_z1, D_G_z2))
-
             # Save Losses for plotting later
             G_losses.append(generator_err.item())
             D_losses.append(errD.item())
 
-            # # Check how the generator is doing by saving G's output on fixed_noise
-            # if (iters % 500 == 0) or ((epoch == num_epochs - 1) and (i == len(data_loader) - 1)):
-            #     with torch.no_grad():
-            #         fake = generator(fixed_noise).detach().cpu()
-            #     img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
-
             iters += 1
+            print("iters: " + str(iters))
+
+        stamp = datetime.now().strftime("%m%d%Y_%H%M%S")
+        save_network(generator, discriminator, stamp, epoch)
+
+def save_network(generator, discriminator, stamp, epoch):
+
+    if not os.path.isdir('saved_networks'):
+        os.mkdir('saved_networks')
+
+    torch.save(generator.state_dict(), "saved_networks/generator_" + str(epoch) + "_" + stamp)
+    torch.save(discriminator.state_dict(), "saved_networks/discriminator_" + str(epoch) + "_" + stamp)
 
 
 if __name__ == "__main__":
